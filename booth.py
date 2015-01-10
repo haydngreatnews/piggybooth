@@ -9,14 +9,19 @@ import pygame
 from pygame.locals import *
 
 PREVIEW = '/mnt/tmp/preview.jpg'
+STORE_DIR = 'images'
+SAVE_PREFIX = 'Booth'
 CAPTION = "Python Photobooth"
-READY_WAIT = 5
-COUNTDOWN_WAIT = 1
+READY_WAIT = 5      # seconds for the 'Get Ready!' prompt
+COUNTDOWN_WAIT = 1  # seconds between 3..2..1
+SHOT_COUNT = 3
 
 class BoothState(Enum):
     waiting = 1
     shooting = 2
-    quit = 3
+    email = 3
+    thanks = 4
+    quit = 5
 
 
 class ShootPhase(Enum):
@@ -24,8 +29,13 @@ class ShootPhase(Enum):
     countdown_three = 3
     countdown_two = 2
     countdown_one = 1
+    shoot = 5
 
     def next(self):
+        if self == ShootPhase.shoot:
+            return ShootPhase.countdown_three
+        elif self == ShootPhase.countdown_one:
+            return ShootPhase.shoot
         return ShootPhase(self.value - 1)
 
 
@@ -53,6 +63,9 @@ class BoothView(object):
         self.state = BoothState.waiting
         self.shoot_phase = ShootPhase.get_ready
         self.phase_start = time.time()
+        self.shots_left = SHOT_COUNT
+        self.counter = 0
+        self.pid = os.getpid()
 
     def run(self):
         running = True
@@ -69,6 +82,9 @@ class BoothView(object):
                 self.wait_state()
             elif self.state == BoothState.shooting:
                 self.shoot_state()
+            elif self.state in (BoothState.email, BoothState.thanks):
+                # Just quit for now
+                self.switch_state(BoothState.waiting)
 
             self.clock.tick(self.fps)
             pygame.display.set_caption("{} FPS: {:6.3}".format(CAPTION, self.clock.get_fps()))
@@ -85,15 +101,23 @@ class BoothView(object):
         self.update_image()
         frame_time = time.time()
         if frame_time > self.phase_start + self.countdown:
-            if self.shoot_phase != ShootPhase.countdown_one:
-                self.phase_start = time.time()
+            self.phase_start = time.time()
+            if self.shoot_phase != ShootPhase.shoot:
+                self.countdown = COUNTDOWN_WAIT
                 self.shoot_phase = self.shoot_phase.next()
             else:
-                # Take a photo and shit...
-                1 == 1
+                if self.shots_left:
+                    self.camera.capture_image(os.path.join(STORE_DIR, '{0}{1}-{2:05d}.jpg'.format(SAVE_PREFIX, self.pid, self.counter)))
+                    self.counter += 1
+                    self.shots_left -= 1
+                    self.shoot_phase = self.shoot_phase.next()
+                    # Add a double time to allow for the shot time
+                    self.countdown = COUNTDOWN_WAIT * 2
+                    if not self.shots_left:
+                        self.switch_state(BoothState.email)
         if self.shoot_phase == ShootPhase.get_ready:
-            self.draw_centered_text('GET READY!', self.huge_font, outline=True)
-        else:
+            self.draw_centered_text('Get Ready!', self.huge_font, outline=True)
+        elif self.shoot_phase != ShootPhase.shoot:
             self.draw_centered_text(str(self.shoot_phase.value), self.huge_font, outline=True)
 
     def update_image(self):
@@ -119,13 +143,17 @@ class BoothView(object):
 
     def switch_state(self, target):
         if target == BoothState.shooting:
-            self.state = BoothState.shooting
             self.countdown = READY_WAIT
             self.fps = 60  # This is a placeholder for infinity in this case...
             self.shoot_phase = ShootPhase.get_ready
+            self.shots_left = SHOT_COUNT
             self.phase_start = time.time()
 
+        self.state = target
+
 if __name__ == '__main__':
+    if not os.path.exists(STORE_DIR):
+        os.mkdir(STORE_DIR)
     BoothView().run()
 
 
