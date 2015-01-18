@@ -1,5 +1,8 @@
 import os
 import time
+import shutil
+import email
+import smtplib
 
 ## Grab the backported enums from python3.4
 from enum import Enum
@@ -7,10 +10,12 @@ from enum import Enum
 import piggyphoto
 import pygame
 from pygame.locals import *
+import easygui
 
 PREVIEW = '/mnt/tmp/preview.jpg'
 STORE_DIR = 'images'
 SAVE_PREFIX = 'Booth'
+STRIP_SUFFIX = 'Strip'
 CAPTION = "Python Photobooth"
 READY_WAIT = 5      # seconds for the 'Get Ready!' prompt
 COUNTDOWN_WAIT = 1  # seconds between 3..2..1
@@ -41,7 +46,7 @@ class ShootPhase(Enum):
 
 class BoothView(object):
 
-    def __init__(self, width=640, height=480, fps=10, fullscreen=False):
+    def __init__(self, width=640, height=480, fps=5, fullscreen=False):
         """Initialize the bits"""
         pygame.init()
         pygame.display.set_caption(CAPTION)
@@ -50,6 +55,7 @@ class BoothView(object):
         self.screen = pygame.display.set_mode((self.width, self.height), pygame.DOUBLEBUF)
         self.background = pygame.Surface(self.screen.get_size()).convert()
         self.clock = pygame.time.Clock()
+        self.base_fps = fps
         self.fps = fps
         self.countdown = 3000
         self.small_font = pygame.font.SysFont('Arial', 20, bold=True)
@@ -64,7 +70,9 @@ class BoothView(object):
         self.shoot_phase = ShootPhase.get_ready
         self.phase_start = time.time()
         self.shots_left = SHOT_COUNT
-        self.counter = 0
+        self.shot_counter = 0
+        self.session_counter = 1
+        self.images = []
         self.pid = os.getpid()
 
     def run(self):
@@ -78,18 +86,22 @@ class BoothView(object):
                         running = False
                     elif event.key == pygame.K_RETURN and self.state == BoothState.waiting:
                         self.switch_state(BoothState.shooting)
+            if not running:
+                break
             if self.state == BoothState.waiting:
                 self.wait_state()
             elif self.state == BoothState.shooting:
                 self.shoot_state()
-            elif self.state in (BoothState.email, BoothState.thanks):
+            elif self.state == BoothState.email:
+                self.collect_email()
+            elif self.state == BoothState.thanks:
                 # Just quit for now
                 self.switch_state(BoothState.waiting)
 
             self.clock.tick(self.fps)
             pygame.display.set_caption("{} FPS: {:6.3}".format(CAPTION, self.clock.get_fps()))
             pygame.display.flip()
-
+        print('Exiting main loop')
         pygame.quit()
 
     def wait_state(self):
@@ -107,34 +119,77 @@ class BoothView(object):
                 self.shoot_phase = self.shoot_phase.next()
             else:
                 if self.shots_left:
-                    self.camera.capture_image(os.path.join(STORE_DIR, '{0}{1}-{2:05d}.jpg'.format(SAVE_PREFIX, self.pid, self.counter)))
-                    self.counter += 1
+                    filename = os.path.join(STORE_DIR, '{0}{1}-{2:04d}{3:02d}.jpg'.format(SAVE_PREFIX, self.pid, self.session_counter, self.shot_counter))
+                    self.camera.capture_image(filename)
+                    self.images.append(filename)
+                    self.shot_counter += 1
                     self.shots_left -= 1
                     self.shoot_phase = self.shoot_phase.next()
                     # Add a double time to allow for the shot time
                     self.countdown = COUNTDOWN_WAIT * 2
-                    if not self.shots_left:
+                    if self.shots_left == 0:
                         self.switch_state(BoothState.email)
+                        return
         if self.shoot_phase == ShootPhase.get_ready:
             self.draw_centered_text('Get Ready!', self.huge_font, outline=True)
         elif self.shoot_phase != ShootPhase.shoot:
             self.draw_centered_text(str(self.shoot_phase.value), self.huge_font, outline=True)
 
-    def update_image(self):
-        self.camera.capture_preview(PREVIEW)
-        picture = pygame.image.load(PREVIEW)
+    def collect_email(self):
+        start = time.time()
+        strip_file = self.generate_strip()
+        finish = time.time()
+        print('Strip generation started {0}, finished {1}, elapsed {2}. Output {3}'.format(start,finish, finish-start, strip_file))
+        email = easygui.enterbox(
+            "Enter your email address if you'd like a copy sent to you:",
+            "Enter your email",
+            "you@example.com"
+        )
+        print(email)
+        send_email = True
+        if email is None or email.endswith('example.com'):
+            send_email = False
+        elif email in ('null@catalyst.net.nz', ''):
+            send_email = False
+
+        if send_email:
+            start = time.time()
+            self.send_strip(email, strip_file)
+            finish = time.time()
+            print('Email sending started {0}, finished {1}, elapsed {2}. Output {3}'.format(start,finish, finish-start, strip_file))
+
+        self.switch_state(BoothState.thanks)
+
+    def update_image(self, source=None):
+        if source is None:
+            camera_file = self.camera.capture_preview()
+            camera_file.save(PREVIEW)
+            camera_file.__dealoc__(PREVIEW)
+            picture = pygame.image.load(PREVIEW)
+        else:
+            picture = pygame.image.load(source)
         picture = pygame.transform.scale(picture, (self.width, self.height))
         self.screen.blit(picture, (0,0))
 
-    def draw_centered_text(self, text, font=None, color=(255,255,255), outline=False):
+    def generate_strip(self):
+        time.sleep(1)
+        strip_file = os.path.join(STORE_DIR, '{0}{1}-{2:04d}-{3}.jpg'.format(SAVE_PREFIX, self.pid, self.session_counter, STRIP_SUFFIX))
+        shutil.copyfile(self.images[0], strip_file)
+        return strip_file
+
+    def send_strip(self, email, file):
+        # Dummy
+        return
+
+    def draw_centered_text(self, text, font=None, color=(255, 255, 255), outline=False):
         """Center text in window"""
         if font == None:
             font = self.small_font
         fw, fh = font.size(text)
         if outline:
-            textobj = font.render(text, True, (0,0,0))
-            for xoffset in (-1,1):
-                for yoffset in (-1,1):
+            textobj = font.render(text, True, (0, 0, 0))
+            for xoffset in (-1, 1):
+                for yoffset in (-1, 1):
                     textpos = textobj.get_rect(centerx=self.background.get_width()/2 + xoffset, centery=self.background.get_height()/2 + yoffset)
                     self.screen.blit(textobj, textpos)
         textobj = font.render(text, True, color)
@@ -143,13 +198,21 @@ class BoothView(object):
 
     def switch_state(self, target):
         if target == BoothState.shooting:
+            # Transition IN to shooting
             self.countdown = READY_WAIT
             self.fps = 60  # This is a placeholder for infinity in this case...
             self.shoot_phase = ShootPhase.get_ready
             self.shots_left = SHOT_COUNT
+            self.images = []
             self.phase_start = time.time()
-
+        elif target == BoothState.waiting:
+            self.fps = self.base_fps
+        if self.state == BoothState.thanks:
+            # When transitioning OUT of thanks
+            self.shot_counter = 0
+            self.session_counter += 1
         self.state = target
+
 
 if __name__ == '__main__':
     if not os.path.exists(STORE_DIR):
