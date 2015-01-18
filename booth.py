@@ -1,6 +1,7 @@
 import os
 import time
 import shutil
+import io
 import email
 from email.MIMEMultipart import MIMEMultipart
 from email.MIMEText import MIMEText
@@ -14,6 +15,9 @@ import piggyphoto
 import pygame
 from pygame.locals import *
 import easygui
+import PIL
+import numpy
+from scipy import ndimage
 
 PREVIEW = '/mnt/tmp/preview.jpg'
 STORE_DIR = 'images'
@@ -21,9 +25,10 @@ SAVE_PREFIX = 'Booth'
 STRIP_SUFFIX = 'Strip'
 CAPTION = "Python Photobooth"
 FROM_ADDR = 'auto-mailer@newport.net.nz'
-READY_WAIT = 5      # seconds for the 'Get Ready!' prompt
+READY_WAIT = 5  # seconds for the 'Get Ready!' prompt
 COUNTDOWN_WAIT = 1  # seconds between 3..2..1
 SHOT_COUNT = 3
+
 
 class BoothState(Enum):
     waiting = 1
@@ -110,7 +115,7 @@ class BoothView(object):
 
     def wait_state(self):
         # Maybe add some fancy image processing?
-        self.update_image()
+        self.update_image(blur=True)
         self.draw_centered_text('PRESS THE BIG RED BUTTON TO START', self.large_font, outline=True)
 
     def shoot_state(self):
@@ -123,7 +128,9 @@ class BoothView(object):
                 self.shoot_phase = self.shoot_phase.next()
             else:
                 if self.shots_left:
-                    filename = os.path.join(STORE_DIR, '{0}{1}-{2:04d}{3:02d}.jpg'.format(SAVE_PREFIX, self.pid, self.session_counter, self.shot_counter))
+                    filename = os.path.join(STORE_DIR, '{0}{1}-{2:04d}{3:02d}.jpg'.format(SAVE_PREFIX, self.pid,
+                                                                                          self.session_counter,
+                                                                                          self.shot_counter))
                     self.camera.capture_image(filename)
                     self.images.append(filename)
                     self.shot_counter += 1
@@ -143,7 +150,9 @@ class BoothView(object):
         start = time.time()
         strip_file = self.generate_strip()
         finish = time.time()
-        print('Strip generation started {0}, finished {1}, elapsed {2}. Output {3}'.format(start,finish, finish-start, strip_file))
+        print(
+            'Strip generation started {0}, finished {1}, elapsed {2}. Output {3}'.format(start, finish, finish - start,
+                                                                                         strip_file))
         email = easygui.enterbox(
             "Enter your email address if you'd like a copy sent to you:",
             "Enter your email",
@@ -160,24 +169,39 @@ class BoothView(object):
             start = time.time()
             self.send_strip(email, strip_file)
             finish = time.time()
-            print('Email sending started {0}, finished {1}, elapsed {2}. Output {3}'.format(start,finish, finish-start, strip_file))
+            print(
+                'Email sending started {0}, finished {1}, elapsed {2}. Output {3}'.format(start, finish, finish - start,
+                                                                                          strip_file))
 
         self.switch_state(BoothState.thanks)
 
-    def update_image(self, source=None):
+    def update_image(self, source=None, blur=False):
         if source is None:
             camera_file = self.camera.capture_preview()
             camera_file.save(PREVIEW)
             camera_file.__dealoc__(PREVIEW)
-            picture = pygame.image.load(PREVIEW)
-        else:
-            picture = pygame.image.load(source)
+
+        picture = pygame.image.load(PREVIEW)
         picture = pygame.transform.scale(picture, (self.width, self.height))
-        self.screen.blit(picture, (0,0))
+        if blur:
+            surface_array = pygame.surfarray.array3d(picture)
+            surface_array = surface_array / 2  # Gives appearance of dark overlay, ~30% speed hit
+            # sigma = 3
+            # Nice blur effect, but ~75% speed hit
+            # surface_array = ndimage.filters.gaussian_filter(
+            #     surface_array,
+            #     sigma=(sigma, sigma, 0),
+            #     order=0,
+            #     mode='reflect'
+            # )
+            picture = pygame.surfarray.make_surface(surface_array)
+        self.screen.blit(picture, (0, 0))
 
     def generate_strip(self):
         time.sleep(1)
-        strip_file = os.path.join(STORE_DIR, '{0}{1}-{2:04d}-{3}.jpg'.format(SAVE_PREFIX, self.pid, self.session_counter, STRIP_SUFFIX))
+        strip_file = os.path.join(STORE_DIR,
+                                  '{0}{1}-{2:04d}-{3}.jpg'.format(SAVE_PREFIX, self.pid, self.session_counter,
+                                                                  STRIP_SUFFIX))
         shutil.copyfile(self.images[0], strip_file)
         return strip_file
 
@@ -195,7 +219,7 @@ class BoothView(object):
         server.ehlo('Python Photobooth')
         server.starttls()
         server.ehlo()
-        server.login('auto-mailer@newport.net.nz', 'PASSWORD')
+        server.login(FROM_ADDR, 'PASSWORD')
         server.sendmail(FROM_ADDR, email_addr, msg.as_string())
         return
 
@@ -208,10 +232,11 @@ class BoothView(object):
             textobj = font.render(text, True, (0, 0, 0))
             for xoffset in (-1, 1):
                 for yoffset in (-1, 1):
-                    textpos = textobj.get_rect(centerx=self.background.get_width()/2 + xoffset, centery=self.background.get_height()/2 + yoffset)
+                    textpos = textobj.get_rect(centerx=self.background.get_width() / 2 + xoffset,
+                                               centery=self.background.get_height() / 2 + yoffset)
                     self.screen.blit(textobj, textpos)
         textobj = font.render(text, True, color)
-        textpos = textobj.get_rect(centerx=self.background.get_width()/2, centery=self.background.get_height()/2)
+        textpos = textobj.get_rect(centerx=self.background.get_width() / 2, centery=self.background.get_height() / 2)
         self.screen.blit(textobj, textpos)
 
     def switch_state(self, target):
