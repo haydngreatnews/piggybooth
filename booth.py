@@ -2,6 +2,9 @@ import os
 import time
 import shutil
 import email
+from email.MIMEMultipart import MIMEMultipart
+from email.MIMEText import MIMEText
+from email.MIMEImage import MIMEImage
 import smtplib
 
 ## Grab the backported enums from python3.4
@@ -17,6 +20,7 @@ STORE_DIR = 'images'
 SAVE_PREFIX = 'Booth'
 STRIP_SUFFIX = 'Strip'
 CAPTION = "Python Photobooth"
+FROM_ADDR = 'auto-mailer@newport.net.nz'
 READY_WAIT = 5      # seconds for the 'Get Ready!' prompt
 COUNTDOWN_WAIT = 1  # seconds between 3..2..1
 SHOT_COUNT = 3
@@ -177,8 +181,22 @@ class BoothView(object):
         shutil.copyfile(self.images[0], strip_file)
         return strip_file
 
-    def send_strip(self, email, file):
-        # Dummy
+    def send_strip(self, email_addr, filepath):
+        msg = MIMEMultipart()
+        msg['From'] = FROM_ADDR
+        msg['To'] = email_addr
+        msg['Subject'] = 'Your Photobooth Strip!'
+        body = 'Thanks for coming along to our party!\nYour photobooth strip is attached'
+        msg.attach(MIMEText(body, 'plain'))
+        img = open(filepath, 'rb')
+        msg.attach(MIMEImage(img.read()))
+
+        server = smtplib.SMTP('mail.newport.net.nz')
+        server.ehlo('Python Photobooth')
+        server.starttls()
+        server.ehlo()
+        server.login('auto-mailer@newport.net.nz', 'PASSWORD')
+        server.sendmail(FROM_ADDR, email_addr, msg.as_string())
         return
 
     def draw_centered_text(self, text, font=None, color=(255, 255, 255), outline=False):
