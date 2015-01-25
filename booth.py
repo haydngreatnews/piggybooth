@@ -54,7 +54,6 @@ class ShootPhase(Enum):
 
 
 class BoothView(object):
-
     def __init__(self, width=640, height=480, fps=5, fullscreen=False):
         """Initialize the bits"""
         pygame.init()
@@ -66,7 +65,7 @@ class BoothView(object):
         self.clock = pygame.time.Clock()
         self.base_fps = fps
         self.fps = fps
-        self.countdown = 3000
+        self.countdown = READY_WAIT
         self.small_font = pygame.font.SysFont('Arial', 20, bold=True)
         self.large_font = pygame.font.SysFont('Arial', 40, bold=True)
         self.huge_font = pygame.font.SysFont('Arial', 150, bold=True)
@@ -150,9 +149,7 @@ class BoothView(object):
         start = time.time()
         strip_file = self.generate_strip()
         finish = time.time()
-        print(
-            'Strip generation started {0}, finished {1}, elapsed {2}. Output {3}'.format(start, finish, finish - start,
-                                                                                         strip_file))
+        print('Strip generation started {0}, finished {1}, elapsed {2}. Output {3}'.format(start, finish, finish - start, strip_file))
         email = easygui.enterbox(
             "Enter your email address if you'd like a copy sent to you:",
             "Enter your email",
@@ -169,9 +166,7 @@ class BoothView(object):
             start = time.time()
             self.send_strip(email, strip_file)
             finish = time.time()
-            print(
-                'Email sending started {0}, finished {1}, elapsed {2}. Output {3}'.format(start, finish, finish - start,
-                                                                                          strip_file))
+            print('Email sending started {0}, finished {1}, elapsed {2}. Output {3}'.format(start, finish, finish - start, strip_file))
 
         self.switch_state(BoothState.thanks)
 
@@ -198,11 +193,18 @@ class BoothView(object):
         self.screen.blit(picture, (0, 0))
 
     def generate_strip(self):
-        time.sleep(1)
-        strip_file = os.path.join(STORE_DIR,
-                                  '{0}{1}-{2:04d}-{3}.jpg'.format(SAVE_PREFIX, self.pid, self.session_counter,
-                                                                  STRIP_SUFFIX))
-        shutil.copyfile(self.images[0], strip_file)
+        width = 1800
+        height = 1200
+        canvas = PIL.Image.open('photobooth_template.jpg')
+        i = 0
+        piece_dims = (833, 533)
+        for pos in [(60,60), (907,60), (60,607)]:
+            img = PIL.Image.open(self.images[i])
+            img = img.resize(piece_dims)
+            canvas.paste(img, box=pos)
+            i += 1
+        strip_file = os.path.join(STORE_DIR, '{0}{1}-{2:04d}-{3}.jpg'.format(SAVE_PREFIX, self.pid, self.session_counter, STRIP_SUFFIX))
+        canvas.save(strip_file)
         return strip_file
 
     def send_strip(self, email_addr, filepath):
@@ -213,7 +215,9 @@ class BoothView(object):
         body = 'Thanks for coming along to our party!\nYour photobooth strip is attached'
         msg.attach(MIMEText(body, 'plain'))
         img = open(filepath, 'rb')
-        msg.attach(MIMEImage(img.read()))
+        mime_image = MIMEImage(img.read())
+        mime_image.add_header('Content-Disposition', 'attachment', filename=os.path.split(filepath)[-1])
+        msg.attach(mime_image)
 
         server = smtplib.SMTP('mail.newport.net.nz')
         server.ehlo('Python Photobooth')
