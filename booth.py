@@ -177,10 +177,17 @@ class BoothView(object):
             camera_file.__dealoc__(PREVIEW)
 
         picture = pygame.image.load(PREVIEW)
-        picture = pygame.transform.scale(picture, (self.width, self.height))
+        (width, height) = picture.get_size()
+        new_width = self.height*(float(width)/height)
+        picture = pygame.transform.scale(picture, (int(new_width), self.height))
+        # Smoothscale looks better, but is a ~30% speed hit
+        # picture = pygame.transform.smoothscale(picture, (int(new_width), self.height))
+        lr_crop = (new_width - self.width)/2
         if blur:
-            surface_array = pygame.surfarray.array3d(picture)
-            surface_array = surface_array / 2  # Gives appearance of dark overlay, ~30% speed hit
+            surface_array = pygame.surfarray.pixels3d(picture)
+            # Do the resize simultaneously with adding the shade
+            surface_array = surface_array[:][lr_crop:new_width-lr_crop] / 2  # Gives appearance of dark overlay, ~30% speed hit
+            lr_crop = 0
             # sigma = 3
             # Nice blur effect, but ~75% speed hit
             # surface_array = ndimage.filters.gaussian_filter(
@@ -190,17 +197,25 @@ class BoothView(object):
             #     mode='reflect'
             # )
             picture = pygame.surfarray.make_surface(surface_array)
-        self.screen.blit(picture, (0, 0))
+        self.screen.blit(picture, (-lr_crop, 0))
 
     def generate_strip(self):
-        width = 1800
-        height = 1200
         canvas = PIL.Image.open('photobooth_template.jpg')
         i = 0
         piece_dims = (833, 533)
         for pos in [(60,60), (907,60), (60,607)]:
             img = PIL.Image.open(self.images[i])
-            img = img.resize(piece_dims)
+            (iwidth, iheight) = img.size
+            # Snip the left and right strips so it's the right proportions
+            iratio = float(iwidth)/iheight
+            new_height = int(round(piece_dims[0] / iratio))
+            print('iratio: {0}, width:{1}, new_height:{2}'.format(iratio, iwidth, new_height))
+            print img.size
+            img = img.resize((piece_dims[0], new_height), resample=PIL.Image.BICUBIC)
+            print img.size
+            print ((0, (new_height - piece_dims[1])/2, piece_dims[0], piece_dims[1] + (new_height - piece_dims[1])/2))
+            img = img.crop((0, (new_height - piece_dims[1])/2, piece_dims[0], piece_dims[1] + (new_height - piece_dims[1])/2))
+            print img.size
             canvas.paste(img, box=pos)
             i += 1
         strip_file = os.path.join(STORE_DIR, '{0}{1}-{2:04d}-{3}.jpg'.format(SAVE_PREFIX, self.pid, self.session_counter, STRIP_SUFFIX))
