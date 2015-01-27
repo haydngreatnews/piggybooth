@@ -7,6 +7,7 @@ from email.MIMEMultipart import MIMEMultipart
 from email.MIMEText import MIMEText
 from email.MIMEImage import MIMEImage
 import smtplib
+import threading
 
 ## Grab the backported enums from python3.4
 from enum import Enum
@@ -16,6 +17,7 @@ import pygame
 from pygame.locals import *
 import easygui
 import PIL
+import serial
 import numpy
 from scipy import ndimage
 
@@ -94,6 +96,10 @@ class BoothView(object):
                         running = False
                     elif event.key == pygame.K_RETURN and self.state == BoothState.waiting:
                         self.switch_state(BoothState.shooting)
+                elif event.type == pygame.USEREVENT:
+                    if event.action == 'button_pressed' and self.state == BoothState.waiting:
+                        print('Actioning event from serial')
+                        self.switch_state(BoothState.shooting)
             if not running:
                 break
             if self.state == BoothState.waiting:
@@ -153,7 +159,7 @@ class BoothView(object):
         email = easygui.enterbox(
             "Enter your email address if you'd like a copy sent to you:",
             "Enter your email",
-            "you@example.com"
+            ""
         )
         print(email)
         send_email = True
@@ -163,10 +169,8 @@ class BoothView(object):
             send_email = False
 
         if send_email:
-            start = time.time()
-            self.send_strip(email, strip_file)
-            finish = time.time()
-            print('Email sending started {0}, finished {1}, elapsed {2}. Output {3}'.format(start, finish, finish - start, strip_file))
+            email_thread = threading.Thread(target=BoothView.send_strip, args=[email, strip_file])
+            email_thread.start()
 
         self.switch_state(BoothState.thanks)
 
@@ -209,20 +213,17 @@ class BoothView(object):
             # Snip the left and right strips so it's the right proportions
             iratio = float(iwidth)/iheight
             new_height = int(round(piece_dims[0] / iratio))
-            print('iratio: {0}, width:{1}, new_height:{2}'.format(iratio, iwidth, new_height))
-            print img.size
             img = img.resize((piece_dims[0], new_height), resample=PIL.Image.BICUBIC)
-            print img.size
-            print ((0, (new_height - piece_dims[1])/2, piece_dims[0], piece_dims[1] + (new_height - piece_dims[1])/2))
             img = img.crop((0, (new_height - piece_dims[1])/2, piece_dims[0], piece_dims[1] + (new_height - piece_dims[1])/2))
-            print img.size
             canvas.paste(img, box=pos)
             i += 1
         strip_file = os.path.join(STORE_DIR, '{0}{1}-{2:04d}-{3}.jpg'.format(SAVE_PREFIX, self.pid, self.session_counter, STRIP_SUFFIX))
         canvas.save(strip_file)
         return strip_file
 
-    def send_strip(self, email_addr, filepath):
+    @staticmethod
+    def send_strip(email_addr, filepath):
+        start = time.time()
         msg = MIMEMultipart()
         msg['From'] = FROM_ADDR
         msg['To'] = email_addr
@@ -240,7 +241,8 @@ class BoothView(object):
         server.ehlo()
         server.login(FROM_ADDR, 'PASSWORD')
         server.sendmail(FROM_ADDR, email_addr, msg.as_string())
-        return
+        finish = time.time()
+        print('Email sending started {0}, finished {1}, elapsed {2}. Output {3}'.format(start, finish, finish - start, filepath))
 
     def draw_centered_text(self, text, font=None, color=(255, 255, 255), outline=False):
         """Center text in window"""
@@ -276,11 +278,28 @@ class BoothView(object):
         self.state = target
 
 
+def serial_listener():
+    try:
+        s = serial.Serial('/dev/ttyACM0', 9600)
+    except serial.SerialException as e:
+        print e
+        return
+    print('Serial listener attached')
+    while True:
+        command = s.readline().rstrip()
+        if command == b'd':
+            pygame.event.post(pygame.event.Event(pygame.USEREVENT, action='button_pressed'))
+        elif command == b'r':
+            print('Ready signal received from Arduino')
+
+
 if __name__ == '__main__':
     if not os.path.exists(STORE_DIR):
         os.mkdir(STORE_DIR)
+    listener = threading.Thread(target=serial_listener)
+    listener.daemon = True
+    listener.start()
     BoothView().run()
-
 
 def quit_pressed():
     for event in pygame.event.get():
