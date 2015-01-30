@@ -191,17 +191,18 @@ class BoothView(object):
             camera_file.__dealoc__(PREVIEW)
 
         picture = pygame.image.load(PREVIEW)
+        picture = pygame.transform.rotate(picture, -90)
         (width, height) = picture.get_size()
-        new_width = self.height*(float(width)/height)
-        picture = pygame.transform.scale(picture, (int(new_width), self.height))
+        new_height = self.width*(float(height)/width)
+        picture = pygame.transform.scale(picture, (self.width, int(new_height)))
         # Smoothscale looks better, but is a ~30% speed hit
         # picture = pygame.transform.smoothscale(picture, (int(new_width), self.height))
-        lr_crop = (new_width - self.width)/2
+        tb_crop = (new_height - self.height)/2.0
         if blur:
             surface_array = pygame.surfarray.pixels3d(picture)
             # Do the resize simultaneously with adding the shade
-            surface_array = surface_array[:][lr_crop:new_width-lr_crop] / 2  # Gives appearance of dark overlay, ~30% speed hit
-            lr_crop = 0
+            surface_array = surface_array[:, tb_crop:-tb_crop] / 2  # Gives appearance of dark overlay, ~30% speed hit
+            tb_crop = 0
             # sigma = 3
             # Nice blur effect, but ~75% speed hit
             # surface_array = ndimage.filters.gaussian_filter(
@@ -211,20 +212,20 @@ class BoothView(object):
             #     mode='reflect'
             # )
             picture = pygame.surfarray.make_surface(surface_array)
-        self.screen.blit(picture, (-lr_crop, 0))
+        self.screen.blit(picture, (0, -tb_crop))
 
     def generate_strip(self):
-        canvas = PIL.Image.open('photobooth_template.jpg')
+        canvas = PIL.Image.open('photobooth_template_portrait.jpg')
         i = 0
         piece_dims = (833, 533)
-        for pos in [(60,60), (907,60), (60,607)]:
+        piece_dims = (533, 833)
+        for pos in [(60,60), (607,60), (60,907)]:
             img = PIL.Image.open(self.images[i])
-            (iwidth, iheight) = img.size
-            # Snip the left and right strips so it's the right proportions
-            iratio = float(iwidth)/iheight
-            new_height = int(round(piece_dims[0] / iratio))
-            img = img.resize((piece_dims[0], new_height), resample=PIL.Image.BICUBIC)
-            img = img.crop((0, (new_height - piece_dims[1])/2, piece_dims[0], piece_dims[1] + (new_height - piece_dims[1])/2))
+            img = img.rotate(-90)
+            # Snip the top and bottom strips so it's the right proportion
+            (dims, crop) = get_resize_transform(img.size, piece_dims)
+            img = img.resize(dims, resample=PIL.Image.ANTIALIAS)
+            img = img.crop((crop[0]/2, crop[1]/2, piece_dims[0]+crop[0]/2,  piece_dims[1]+crop[1]/2))
             canvas.paste(img, box=pos)
             i += 1
         strip_file = os.path.join(STORE_DIR, '{0}{1}-{2:04d}-{3}.jpg'.format(SAVE_PREFIX, self.pid, self.session_counter, STRIP_SUFFIX))
@@ -301,6 +302,20 @@ def serial_listener():
             pygame.event.post(pygame.event.Event(pygame.USEREVENT, action='button_pressed'))
         elif command == b'r':
             print('Ready signal received from Arduino')
+
+def get_resize_transform(current, desired):
+    """Takes two dimension tuples in (w, h) form, and returns the dimension to scale to, and the number of pixels in each dimension to crop"""
+    if len(current) != 2 or len(desired) != 2:
+        raise ValueError('Current and desired must both contain exactly two dimensions')
+    w_ratio = float(desired[0])/current[0]
+    h_ratio = float(desired[1])/current[1]
+    scale_factor = max(w_ratio, h_ratio)
+    dims = (int(current[0] * scale_factor), int(current[1] * scale_factor))
+    w_crop = dims[0] - desired[0]
+    h_crop = dims[1] - desired[1]
+    crop = (int(w_crop), int(h_crop))
+    return (dims, crop)
+
 
 
 if __name__ == '__main__':
