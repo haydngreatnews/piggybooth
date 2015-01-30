@@ -56,13 +56,19 @@ class ShootPhase(Enum):
 
 
 class BoothView(object):
-    def __init__(self, width=640, height=480, fps=5, fullscreen=False):
+    def __init__(self, width=512, height=640, fps=5, fullscreen=True):
         """Initialize the bits"""
         pygame.init()
         pygame.display.set_caption(CAPTION)
         self.width = width
         self.height = height
-        self.screen = pygame.display.set_mode((self.width, self.height), pygame.DOUBLEBUF)
+        self.screen = None
+        self.fullscreen = fullscreen
+        if fullscreen:
+            self.screen = pygame.display.set_mode((0,0), pygame.FULLSCREEN | pygame.DOUBLEBUF)
+            (self.width, self.height) = self.screen.get_size()
+        else:
+            self.screen = pygame.display.set_mode((self.width, self.height), pygame.DOUBLEBUF)
         self.background = pygame.Surface(self.screen.get_size()).convert()
         self.clock = pygame.time.Clock()
         self.base_fps = fps
@@ -156,6 +162,8 @@ class BoothView(object):
         strip_file = self.generate_strip()
         finish = time.time()
         print('Strip generation started {0}, finished {1}, elapsed {2}. Output {3}'.format(start, finish, finish - start, strip_file))
+        if self.fullscreen:
+            pygame.display.toggle_fullscreen()
         email = easygui.enterbox(
             "Enter your email address if you'd like a copy sent to you:",
             "Enter your email",
@@ -172,6 +180,8 @@ class BoothView(object):
             email_thread = threading.Thread(target=BoothView.send_strip, args=[email, strip_file])
             email_thread.start()
 
+        if self.fullscreen:
+            pygame.display.toggle_fullscreen()
         self.switch_state(BoothState.thanks)
 
     def update_image(self, source=None, blur=False):
