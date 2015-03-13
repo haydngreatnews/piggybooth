@@ -1,10 +1,8 @@
 import os
-import sys
 import time
 import shutil
 import io
 import email
-import argparse
 from email.MIMEMultipart import MIMEMultipart
 from email.MIMEText import MIMEText
 from email.MIMEImage import MIMEImage
@@ -14,10 +12,10 @@ import threading
 ## Grab the backported enums from python3.4
 from enum import Enum
 
-import piggyphoto
-import pygame
-from pygame.locals import *
-import easygui
+#import piggyphoto
+#import pygame
+#from pygame.locals import *
+#import easygui
 import PIL
 import serial
 import numpy
@@ -29,11 +27,9 @@ SAVE_PREFIX = 'Booth'
 STRIP_SUFFIX = 'Strip'
 CAPTION = "Python Photobooth"
 FROM_ADDR = 'auto-mailer@newport.net.nz'
-SERIAL = '/dev/ttyACM0'
-READY_WAIT = 5  # seconds for the 'Get Ready!' prompt
+READY_WAIT = 3  # seconds for the 'Get Ready!' prompt
 COUNTDOWN_WAIT = 1  # seconds between 3..2..1
 SHOT_COUNT = 3
-SCRIPT_DIR = './'
 
 
 class BoothState(Enum):
@@ -62,35 +58,29 @@ class ShootPhase(Enum):
 class BoothView(object):
     def __init__(self, width=1024, height=1280, fps=5, fullscreen=False):
         """Initialize the bits"""
-        pygame.init()
-        pygame.display.set_caption(CAPTION)
-        dir = os.path.dirname(PREVIEW)
-        if not os.access(dir, os.W_OK):
-            print 'Directory {} is not writable. Ensure it exists and is writable.\n'.format(dir)
-            print 'Try `mount -t tmpfs -o size=100m tmpfs {}` to create a ramdisk in that location\n'.format(dir)
-            pygame.quit()
-            sys.exit()
+        #pygame.init()
+        #pygame.display.set_caption(CAPTION)
         self.width = width
         self.height = height
         self.screen = None
         self.fullscreen = fullscreen
-        if fullscreen:
-            self.screen = pygame.display.set_mode((0,0), pygame.FULLSCREEN | pygame.DOUBLEBUF)
-            (self.width, self.height) = self.screen.get_size()
-        else:
-            self.screen = pygame.display.set_mode((self.width, self.height), pygame.DOUBLEBUF)
-        self.background = pygame.Surface(self.screen.get_size()).convert()
-        self.clock = pygame.time.Clock()
+        #if fullscreen:
+            #self.screen = pygame.display.set_mode((0,0), pygame.FULLSCREEN | pygame.DOUBLEBUF)
+            #(self.width, self.height) = self.screen.get_size()
+        #else:
+            #self.screen = pygame.display.set_mode((self.width, self.height), pygame.DOUBLEBUF)
+        #self.background = pygame.Surface(self.screen.get_size()).convert()
+        #self.clock = pygame.time.Clock()
         self.base_fps = fps
         self.fps = fps
         self.countdown = READY_WAIT
-        self.small_font = pygame.font.SysFont('Arial', 20, bold=True)
-        self.large_font = pygame.font.SysFont('Arial', 40, bold=True)
-        self.huge_font = pygame.font.SysFont('Arial', 150, bold=True)
+        #self.small_font = pygame.font.SysFont('Arial', 20, bold=True)
+        #self.large_font = pygame.font.SysFont('Arial', 40, bold=True)
+        #self.huge_font = pygame.font.SysFont('Arial', 150, bold=True)
 
-        self.camera = piggyphoto.camera()
-        self.camera.leave_locked()
-        self.camera.capture_preview(PREVIEW)
+        #self.camera = piggyphoto.camera()
+        #self.camera.leave_locked()
+        #self.camera.capture_preview(PREVIEW)
 
         self.state = BoothState.waiting
         self.shoot_phase = ShootPhase.get_ready
@@ -203,10 +193,8 @@ class BoothView(object):
         picture = pygame.image.load(PREVIEW)
         picture = pygame.transform.rotate(picture, -90)
         (width, height) = picture.get_size()
-        #new_height = self.width*(float(height)/width)
-        new_height = 800*(float(height)/width)
-        #picture = pygame.transform.scale(picture, (self.width, int(new_height)))
-        picture = pygame.transform.scale(picture, (800, int(new_height)))
+        new_height = self.width*(float(height)/width)
+        picture = pygame.transform.scale(picture, (self.width, int(new_height)))
         # Smoothscale looks better, but is a ~30% speed hit
         # picture = pygame.transform.smoothscale(picture, (int(new_width), self.height))
         tb_crop = (new_height - self.height)/2.0
@@ -224,15 +212,14 @@ class BoothView(object):
             #     mode='reflect'
             # )
             picture = pygame.surfarray.make_surface(surface_array)
-        #self.screen.blit(picture, (0, -tb_crop))
-        self.screen.blit(picture, ((self.width - 800)/2, -tb_crop))
+        self.screen.blit(picture, (0, -tb_crop))
 
     def generate_strip(self):
-        canvas = PIL.Image.open(os.path.join(SCRIPT_DIR, 'photobooth_template_portrait.jpg'))
+        canvas = PIL.Image.open('photobooth_template_portrait_lge.jpg')
         i = 0
-        piece_dims = (833, 533)
-        piece_dims = (533, 833)
-        for pos in [(60,60), (607,60), (60,907)]:
+        piece_dims = (3332, 533)
+        piece_dims = (2132, 3332)
+        for pos in [(240,240), (2428,240), (240,3628)]:
             img = PIL.Image.open(self.images[i])
             img = img.rotate(-90)
             # Snip the top and bottom strips so it's the right proportion
@@ -242,7 +229,7 @@ class BoothView(object):
             canvas.paste(img, box=pos)
             i += 1
         strip_file = os.path.join(STORE_DIR, '{0}{1}-{2:04d}-{3}.jpg'.format(SAVE_PREFIX, self.pid, self.session_counter, STRIP_SUFFIX))
-        canvas.save(strip_file)
+        canvas.save(strip_file, quality=100, optimize=True)
         return strip_file
 
     @staticmethod
@@ -263,10 +250,10 @@ class BoothView(object):
         server.ehlo('Python Photobooth')
         server.starttls()
         server.ehlo()
-        server.login(FROM_ADDR, '<PASSWORD>')
+        server.login(FROM_ADDR, 'aI6Y&i&ACTv9R#RFMg3m')
         server.sendmail(FROM_ADDR, email_addr, msg.as_string())
         finish = time.time()
-        print('Email sending to {4} started {0}, finished {1}, elapsed {2}. Output {3}'.format(start, finish, finish - start, filepath, email_addr))
+        print('Email sending started {0}, finished {1}, elapsed {2}. Output {3}'.format(start, finish, finish - start, filepath))
 
     def draw_centered_text(self, text, font=None, color=(255, 255, 255), outline=False):
         """Center text in window"""
@@ -304,7 +291,7 @@ class BoothView(object):
 
 def serial_listener():
     try:
-        s = serial.Serial(SERIAL, 9600)
+        s = serial.Serial('/dev/ttyACM0', 9600)
     except serial.SerialException as e:
         print e
         return
@@ -329,16 +316,9 @@ def get_resize_transform(current, desired):
     crop = (int(w_crop), int(h_crop))
     return (dims, crop)
 
+
+
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='A fun photobooth')
-    parser.add_argument('--serial', help='the serial port to listen for a button', default='/dev/ttyACM0', nargs='?', type=str)
-    #parser.add_argument('camera', help='the gphoto device to use', default="/dev/ttyACM0")
-
-    args = parser.parse_args()
-    SERIAL = args.serial
-
-    SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
-
     if not os.path.exists(STORE_DIR):
         os.mkdir(STORE_DIR)
     listener = threading.Thread(target=serial_listener)
@@ -350,5 +330,5 @@ def quit_pressed():
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             return True
-    # Don't quit... someone might be messing around
+    # Don't quit... someone might be being a dickhead
     return False
