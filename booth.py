@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import shutil
 import io
@@ -60,6 +61,12 @@ class BoothView(object):
         """Initialize the bits"""
         pygame.init()
         pygame.display.set_caption(CAPTION)
+        dir = os.path.dirname(PREVIEW)
+        if not os.access(dir, os.W_OK):
+            print 'Directory {} is not writable. Ensure it exists and is writable.\n'.format(dir)
+            print 'Try `mount -t tmpfs -o size=100m tmpfs {}` to create a ramdisk in that location\n'.format(dir)
+            pygame.quit()
+            sys.exit()
         self.width = width
         self.height = height
         self.screen = None
