@@ -4,6 +4,7 @@ import time
 import shutil
 import io
 import email
+import argparse
 from email.MIMEMultipart import MIMEMultipart
 from email.MIMEText import MIMEText
 from email.MIMEImage import MIMEImage
@@ -28,6 +29,7 @@ SAVE_PREFIX = 'Booth'
 STRIP_SUFFIX = 'Strip'
 CAPTION = "Python Photobooth"
 FROM_ADDR = 'auto-mailer@newport.net.nz'
+SERIAL = '/dev/ttyACM0'
 READY_WAIT = 5  # seconds for the 'Get Ready!' prompt
 COUNTDOWN_WAIT = 1  # seconds between 3..2..1
 SHOT_COUNT = 3
@@ -298,7 +300,7 @@ class BoothView(object):
 
 def serial_listener():
     try:
-        s = serial.Serial('/dev/ttyACM0', 9600)
+        s = serial.Serial(SERIAL, 9600)
     except serial.SerialException as e:
         print e
         return
@@ -323,9 +325,14 @@ def get_resize_transform(current, desired):
     crop = (int(w_crop), int(h_crop))
     return (dims, crop)
 
-
-
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='A fun photobooth')
+    parser.add_argument('--serial', help='the serial port to listen for a button', default='/dev/ttyACM0', nargs='?', type=str)
+    #parser.add_argument('camera', help='the gphoto device to use', default="/dev/ttyACM0")
+
+    args = parser.parse_args()
+    SERIAL = args.serial
+
     if not os.path.exists(STORE_DIR):
         os.mkdir(STORE_DIR)
     listener = threading.Thread(target=serial_listener)
