@@ -60,7 +60,7 @@ class ShootPhase(Enum):
 
 
 class BoothView(object):
-    def __init__(self, width=1024, height=1280, fps=5, fullscreen=False):
+    def __init__(self, width=900, height=768, fps=5, fullscreen=True):
         """Initialize the bits"""
         pygame.init()
         pygame.display.set_caption(CAPTION)
@@ -263,7 +263,7 @@ class BoothView(object):
         server.ehlo('Python Photobooth')
         server.starttls()
         server.ehlo()
-        server.login(FROM_ADDR, '<PASSWORD>')
+        server.login(FROM_ADDR, 'aI6Y&i&ACTv9R#RFMg3m')
         server.sendmail(FROM_ADDR, email_addr, msg.as_string())
         finish = time.time()
         print('Email sending to {4} started {0}, finished {1}, elapsed {2}. Output {3}'.format(start, finish, finish - start, filepath, email_addr))
