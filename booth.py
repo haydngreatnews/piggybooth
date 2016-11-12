@@ -33,6 +33,7 @@ SERIAL = '/dev/ttyACM0'
 READY_WAIT = 5  # seconds for the 'Get Ready!' prompt
 COUNTDOWN_WAIT = 1  # seconds between 3..2..1
 SHOT_COUNT = 3
+SCRIPT_DIR = './'
 
 
 class BoothState(Enum):
@@ -59,7 +60,7 @@ class ShootPhase(Enum):
 
 
 class BoothView(object):
-    def __init__(self, width=512, height=640, fps=5, fullscreen=True):
+    def __init__(self, width=900, height=768, fps=5, fullscreen=True):
         """Initialize the bits"""
         pygame.init()
         pygame.display.set_caption(CAPTION)
@@ -202,8 +203,10 @@ class BoothView(object):
         picture = pygame.image.load(PREVIEW)
         picture = pygame.transform.rotate(picture, -90)
         (width, height) = picture.get_size()
-        new_height = self.width*(float(height)/width)
-        picture = pygame.transform.scale(picture, (self.width, int(new_height)))
+        #new_height = self.width*(float(height)/width)
+        new_height = 800*(float(height)/width)
+        #picture = pygame.transform.scale(picture, (self.width, int(new_height)))
+        picture = pygame.transform.scale(picture, (800, int(new_height)))
         # Smoothscale looks better, but is a ~30% speed hit
         # picture = pygame.transform.smoothscale(picture, (int(new_width), self.height))
         tb_crop = (new_height - self.height)/2.0
@@ -221,10 +224,11 @@ class BoothView(object):
             #     mode='reflect'
             # )
             picture = pygame.surfarray.make_surface(surface_array)
-        self.screen.blit(picture, (0, -tb_crop))
+        #self.screen.blit(picture, (0, -tb_crop))
+        self.screen.blit(picture, ((self.width - 800)/2, -tb_crop))
 
     def generate_strip(self):
-        canvas = PIL.Image.open('photobooth_template_portrait.jpg')
+        canvas = PIL.Image.open(os.path.join(SCRIPT_DIR, 'photobooth_template_portrait.jpg'))
         i = 0
         piece_dims = (833, 533)
         piece_dims = (533, 833)
@@ -259,10 +263,10 @@ class BoothView(object):
         server.ehlo('Python Photobooth')
         server.starttls()
         server.ehlo()
-        server.login(FROM_ADDR, 'PASSWORD')
+        server.login(FROM_ADDR, '<PASSWORD>')
         server.sendmail(FROM_ADDR, email_addr, msg.as_string())
         finish = time.time()
-        print('Email sending started {0}, finished {1}, elapsed {2}. Output {3}'.format(start, finish, finish - start, filepath))
+        print('Email sending to {4} started {0}, finished {1}, elapsed {2}. Output {3}'.format(start, finish, finish - start, filepath, email_addr))
 
     def draw_centered_text(self, text, font=None, color=(255, 255, 255), outline=False):
         """Center text in window"""
@@ -332,6 +336,8 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     SERIAL = args.serial
+
+    SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 
     if not os.path.exists(STORE_DIR):
         os.mkdir(STORE_DIR)

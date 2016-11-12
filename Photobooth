@@ -1,0 +1,13 @@
+#!/bin/bash
+
+if ! mountpoint /mnt/tmp; then
+  echo 'mounting temp dir'
+  sudo mount -t tmpfs -o size=100m tmpfs /mnt/tmp
+fi;
+
+cd /home/haydn/photobooth;
+
+while [ 1 ]; do
+  python booth.py --serial /dev/ttyACM* | tee -a booth.log
+  sleep 5
+done;
