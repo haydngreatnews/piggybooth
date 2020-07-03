@@ -203,17 +203,20 @@ class BoothView(object):
         picture = pygame.image.load(PREVIEW)
         picture = pygame.transform.rotate(picture, -90)
         (width, height) = picture.get_size()
-        #new_height = self.width*(float(height)/width)
-        new_height = 800*(float(height)/width)
-        #picture = pygame.transform.scale(picture, (self.width, int(new_height)))
-        picture = pygame.transform.scale(picture, (800, int(new_height)))
+        new_height = self.width*(float(height)/width)
+        #new_height = 800*(float(height)/width)
+        picture = pygame.transform.scale(picture, (self.width, int(new_height)))
+        #picture = pygame.transform.scale(picture, (800, int(new_height)))
         # Smoothscale looks better, but is a ~30% speed hit
         # picture = pygame.transform.smoothscale(picture, (int(new_width), self.height))
         tb_crop = (new_height - self.height)/2.0
         if blur:
             surface_array = pygame.surfarray.pixels3d(picture)
             # Do the resize simultaneously with adding the shade
-            surface_array = surface_array[:, tb_crop:-tb_crop] / 2  # Gives appearance of dark overlay, ~30% speed hit
+            if tb_crop > 0:
+                surface_array = surface_array[tb_crop:-tb_crop] / 2  # Gives appearance of dark overlay, ~30% speed hit
+            else:
+                surface_array = surface_array / 2
             tb_crop = 0
             # sigma = 3
             # Nice blur effect, but ~75% speed hit
@@ -225,7 +228,7 @@ class BoothView(object):
             # )
             picture = pygame.surfarray.make_surface(surface_array)
         #self.screen.blit(picture, (0, -tb_crop))
-        self.screen.blit(picture, ((self.width - 800)/2, -tb_crop))
+        self.screen.blit(picture, (0, -tb_crop))
 
     def generate_strip(self):
         canvas = PIL.Image.open(os.path.join(SCRIPT_DIR, 'photobooth_template_portrait.jpg'))
@@ -344,7 +347,7 @@ if __name__ == '__main__':
     listener = threading.Thread(target=serial_listener)
     listener.daemon = True
     listener.start()
-    BoothView().run()
+    BoothView(width=1050, height=1680).run()
 
 def quit_pressed():
     for event in pygame.event.get():
