@@ -42,7 +42,7 @@ def library_version(verbose = True):
     return v
 
 import os, string, time
-from ptp import *
+from .ptp import *
 
 PTR = ctypes.pointer
 
@@ -216,17 +216,17 @@ class camera(object):
 
     def init(self):
         if self.initialized:
-            print "Camera is already initialized."
+            print("Camera is already initialized.")
         ans = 0
         for i in range(1 + retries):
             ans = gp.gp_camera_init(self._cam, context)
             if ans == 0:
                 break
             elif ans == -60:
-                print "***", unmount_cmd
+                print("***", unmount_cmd)
                 os.system(unmount_cmd)
                 time.sleep(1)
-                print "camera.init() retry #%d..." % (i)
+                print("camera.init() retry #%d..." % (i))
         check(ans)
         self.initialized = True
 
@@ -300,7 +300,7 @@ class camera(object):
         for i in range(1 + retries):
             ans = gp.gp_camera_capture(self._cam, GP_CAPTURE_IMAGE, PTR(path), context)
             if ans == 0: break
-            else: print "capture_image(%s) retry #%d..." % (destpath, i)
+            else: print("capture_image(%s) retry #%d..." % (destpath, i))
         check(ans)
 
         if destpath:
@@ -316,7 +316,7 @@ class camera(object):
         for i in range(1 + retries):
             ans = gp.gp_camera_capture_preview(self._cam, cfile._cf, context)
             if ans == 0: break
-            else: print "capture_preview(%s) retry #%d..." % (destpath, i)
+            else: print("capture_preview(%s) retry #%d..." % (destpath, i))
         check(ans)
 
         if destpath:
@@ -351,7 +351,7 @@ class camera(object):
             for c in children:
                 self._list_config(c, cfglist, path + "." + c.name)
         else:
-            print path, "=", widget.value
+            print(path, "=", widget.value)
             cfglist.append(path)
 
     def list_config(self):
@@ -379,7 +379,7 @@ class cameraFile(object):
 
     def save(self, filename = None):
         if filename is None: filename = self.name
-        check(gp.gp_file_save(self._cf, filename))
+        check(gp.gp_file_save(self._cf, filename.encode("ascii")))
 
     def ref(self):
         check(gp.gp_file_ref(self._cf))
@@ -494,7 +494,7 @@ class cameraList(object):
                 il.count()
                 al = cameraAbilitiesList()
                 al.detect(il, xlist)
-                for i in xrange(xlist.count()):
+                for i in range(xlist.count()):
                     model = xlist.get_name(i)
                     path = xlist.get_value(i)
                     if re.match(r'usb:\d{3},\d{3}', path):
@@ -557,7 +557,7 @@ class cameraList(object):
         return header + string.join(contents, "\n")
 
     def toList(self):
-        return [(self.get_name(i), self.get_value(i)) for i in xrange(self.count())]
+        return [(self.get_name(i), self.get_value(i)) for i in range(self.count())]
         xlist = []
         for i in range(self.count()):
             n, v = self.get_name(i), self.get_value(i)

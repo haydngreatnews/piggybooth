@@ -5,9 +5,9 @@ import shutil
 import io
 import email
 import argparse
-from email.MIMEMultipart import MIMEMultipart
-from email.MIMEText import MIMEText
-from email.MIMEImage import MIMEImage
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.image import MIMEImage
 import smtplib
 import threading
 
@@ -51,7 +51,7 @@ class ShootPhase(Enum):
     countdown_one = 1
     shoot = 5
 
-    def next(self):
+    def __next__(self):
         if self == ShootPhase.shoot:
             return ShootPhase.countdown_three
         elif self == ShootPhase.countdown_one:
@@ -146,7 +146,7 @@ class BoothView(object):
             self.phase_start = time.time()
             if self.shoot_phase != ShootPhase.shoot:
                 self.countdown = COUNTDOWN_WAIT
-                self.shoot_phase = self.shoot_phase.next()
+                self.shoot_phase = next(self.shoot_phase)
             else:
                 if self.shots_left:
                     filename = os.path.join(STORE_DIR, '{0}{1}-{2:04d}{3:02d}.jpg'.format(SAVE_PREFIX, self.pid,
@@ -156,7 +156,7 @@ class BoothView(object):
                     self.images.append(filename)
                     self.shot_counter += 1
                     self.shots_left -= 1
-                    self.shoot_phase = self.shoot_phase.next()
+                    self.shoot_phase = next(self.shoot_phase)
                     # Add a double time to allow for the shot time
                     self.countdown = COUNTDOWN_WAIT * 2
                     if self.shots_left == 0:
@@ -171,7 +171,7 @@ class BoothView(object):
         start = time.time()
         strip_file = self.generate_strip()
         finish = time.time()
-        print('Strip generation started {0}, finished {1}, elapsed {2}. Output {3}'.format(start, finish, finish - start, strip_file))
+        print(('Strip generation started {0}, finished {1}, elapsed {2}. Output {3}'.format(start, finish, finish - start, strip_file)))
         if self.fullscreen:
             pygame.display.toggle_fullscreen()
         email = easygui.enterbox(
@@ -269,7 +269,7 @@ class BoothView(object):
         server.login(FROM_ADDR, 'aI6Y&i&ACTv9R#RFMg3m')
         server.sendmail(FROM_ADDR, email_addr, msg.as_string())
         finish = time.time()
-        print('Email sending to {4} started {0}, finished {1}, elapsed {2}. Output {3}'.format(start, finish, finish - start, filepath, email_addr))
+        print(('Email sending to {4} started {0}, finished {1}, elapsed {2}. Output {3}'.format(start, finish, finish - start, filepath, email_addr)))
 
     def draw_centered_text(self, text, font=None, color=(255, 255, 255), outline=False):
         """Center text in window"""
@@ -309,7 +309,7 @@ def serial_listener():
     try:
         s = serial.Serial(SERIAL, 9600)
     except serial.SerialException as e:
-        print e
+        print(e)
         return
     print('Serial listener attached')
     while True:
@@ -347,7 +347,7 @@ if __name__ == '__main__':
     listener = threading.Thread(target=serial_listener)
     listener.daemon = True
     listener.start()
-    BoothView(width=1050, height=1680).run()
+    BoothView(width=1050, height=1680, fullscreen=False).run()
 
 def quit_pressed():
     for event in pygame.event.get():
